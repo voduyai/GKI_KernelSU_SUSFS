@@ -102,6 +102,15 @@ runs:
           echo "Applying super.c Android 14 6.1 Fake Patch"
           sed -i '/^#include <trace\/hooks\/fs.h>$/,+1 d' fs/super.c
         fi
+        # susfs4ksu gki-android14-6.1 (2026-10 sync) uses <trace/hooks/blk.h>
+        # as namespace.c context, which older 6.1 trees (e.g. 138) lack.
+        if [ "${{ inputs.sublevel }}" -lt "157" ] \
+            && grep -q '^ #include <trace/hooks/blk.h>$' 50_add_susfs_in_gki-${{ inputs.version }}.patch \
+            && ! grep -q '^#include <trace/hooks/blk.h>$' fs/namespace.c; then
+          echo "Applying namespace.c blk.h context Fake Patch"
+          sed -i '/^#include "internal.h"$/a #include <trace/hooks/blk.h>' fs/namespace.c
+          touch .susfs_fake_blk_h
+        fi
 
     - name: Apply Android 15 6.6 Fake Patches
       shell: bash
