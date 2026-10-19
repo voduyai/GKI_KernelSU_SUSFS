@@ -561,7 +561,9 @@ jobs:
       run: touch "${{ github.workspace }}/wild_gki.fragment"
 
     - name: Apply Kernel Bypass Hack
-      if: ${{ inputs.allow_version_mismatch == 'true' }}
+      # allow_version_mismatch is a boolean input; comparing it to the string
+      # 'true' is always false in Actions expressions, so test it directly.
+      if: ${{ inputs.allow_version_mismatch }}
       uses: ./.github/actions/bypass-kernel
       with:
         version: ${{ inputs.version }}

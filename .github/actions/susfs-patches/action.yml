@@ -167,6 +167,16 @@ runs:
       run: |
         patch -p1 < 50_add_susfs_in_gki-${{ inputs.version }}.patch
 
+        # susfs4ksu (2026-10 sync) calls ksu_setup_preinit_file() and
+        # ksu_preinit_handle_post_execveat() from do_execveat_common() unless
+        # KSU_NO_PREINIT is defined. Root trees that don't provide those
+        # (e.g. pershoot KernelSU-Next dev-susfs) fail at link time, so opt out.
+        if grep -q 'KSU_NO_PREINIT' fs/exec.c \
+            && ! grep -rqs 'ksu_setup_preinit_file' ../KernelSU ../KernelSU-Next ../BakaSU ../SukiSU-Ultra ../KowSU; then
+          sed -i '0,/^#ifndef KSU_NO_PREINIT$/s//#define KSU_NO_PREINIT\n#ifndef KSU_NO_PREINIT/' fs/exec.c
+          echo "Root tree has no ksu_setup_preinit_file(); defined KSU_NO_PREINIT in fs/exec.c"
+        fi
+
         # SUSFS's OPEN_REDIRECT code unconditionally calls VMA_PAD_START(), which
         # only exists on GKI branches that carry Google's page-size-migration
         # feature (added to each android version's kernel/common branch at a
