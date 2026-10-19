@@ -197,9 +197,15 @@ jobs:
           OS_PATCH_LEVEL_YM="$OS_PATCH_LEVEL_INPUT"
         fi
         FIXED_BUILD_DATE="${OS_PATCH_LEVEL_YM}-05 04:20:00 UTC"
+        KBUILD_TS_FMT='+%a %b %d %H:%M:%S UTC %Y'
+        # muyu stock (tag android14-6.1-2025-06_r15): "Wed Dec  3 02:05:30 UTC 2025"
+        if [ "${{ inputs.version }}" = "android14-6.1" ] && [ "$OS_PATCH_LEVEL_INPUT" = "2025-06" ]; then
+          FIXED_BUILD_DATE="2025-12-03 02:05:30 UTC"
+          KBUILD_TS_FMT='+%a %b %e %H:%M:%S UTC %Y'
+        fi
         SOURCE_DATE_EPOCH=$(date -u -d "$FIXED_BUILD_DATE" +%s)
         echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> $GITHUB_ENV
-        KBUILD_TS=$(date -u -d @${SOURCE_DATE_EPOCH} '+%a %b %d %H:%M:%S UTC %Y')
+        KBUILD_TS=$(date -u -d @${SOURCE_DATE_EPOCH} "$KBUILD_TS_FMT")
         echo "KBUILD_BUILD_TIMESTAMP=${KBUILD_TS}" >> $GITHUB_ENV
         # Keep git metadata aligned with the same fixed timestamp.
         GIT_DATE=$(date -u -d @${SOURCE_DATE_EPOCH} '+%Y-%m-%dT%H:%M:%SZ')

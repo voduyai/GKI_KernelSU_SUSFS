@@ -39,6 +39,15 @@ runs:
         KEEP_KMI="${{ inputs.keep_kmi }}"
 
         if [ -z "$BRAND" ]; then
+          # muyu stock: 6.1.138-android14-11-g0c3d559bcd85-ab14529422
+          if [ "$VERSION" = "android14-6.1" ] && [ "${{ inputs.sublevel }}" = "138" ]; then
+            sed -i '$d' scripts/setlocalversion
+            echo 'echo "-android14-11-g0c3d559bcd85-ab14529422"' >> scripts/setlocalversion
+            chmod +x scripts/setlocalversion
+            echo "brand_name is empty, forcing muyu stock version string"
+            tail -n 1 scripts/setlocalversion
+            exit 0
+          fi
           echo "brand_name is empty, keeping stock kernel version string"
           exit 0
         fi

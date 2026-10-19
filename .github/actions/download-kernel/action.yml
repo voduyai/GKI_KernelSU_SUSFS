@@ -72,6 +72,15 @@ runs:
               echo "WARNING: no head or tag found for ${FORMATTED_BRANCH}; sync will likely fail." >&2
             fi
           fi
+          # muyu (Xiaomi Pad 7 Pro) global OS3.0.304.0: stock GKI is
+          # 6.1.138-android14-11-g0c3d559bcd85-ab14529422 == tag _r15.
+          # Pin it so the source matches the stock kernel exactly.
+          if [ "$FORMATTED_BRANCH" = "android14-6.1-2025-06" ]; then
+            PIN_TAG="android14-6.1-2025-06_r15"
+            sed -i "/path=\"common\"/ s|revision=\"[^\"]*\"|revision=\"refs/tags/${PIN_TAG}\"|" "$DEFAULT_MANIFEST_PATH"
+            echo "[!] Note: pinning common to tag ${PIN_TAG} (muyu stock)."
+            TAG_FALLBACK="$PIN_TAG"
+          fi
           echo "tag_fallback=$TAG_FALLBACK" >> $GITHUB_OUTPUT
         }
 
