@@ -81,8 +81,11 @@ runs:
           if [ "$PAGE_SIZE" = "16k" ]; then
             PAGE_SIZE_FLAGS+=(--page_size=16k)
           fi
+          # --config=stamp makes Kleaf take SOURCE_DATE_EPOCH from the env
+          # (set in build.yml); without it the build date is 1970-01-01.
           tools/bazel build \
             --config=fast \
+            --config=stamp \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             //common:kernel_aarch64/Image
