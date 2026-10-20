@@ -21,11 +21,7 @@ runs:
       run: |
         sed -i 's/CONFIG_IP_SET_MAX/65534/g' net/netfilter/ipset/ip_set_core.c
 
-    # muyu (Xiaomi Pad 7 Pro, android14-6.1): the BBRv3 backport changes
-    # struct tcp_sock / rate_sample and bootloops the stock vendor modules,
-    # so it is skipped there. Plain BBR (v1) from networking-config stays.
     - name: Apply BBRv3 Patch
-      if: inputs.version != 'android14-6.1'
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
@@ -62,7 +58,6 @@ runs:
         echo "[+] BBRv3 patches applied"
 
     - name: Enable BBRv3 Kernel Config
-      if: inputs.version != 'android14-6.1'
       uses: ./.github/actions/set-kernel-config
       with:
         config_list: |
