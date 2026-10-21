@@ -56,7 +56,59 @@ runs:
       run: |
         PAGE_SIZE="${{ inputs.page_size }}"
         sed -i 's/check_defconfig//' ./common/build.config.gki
-        if [ -f "build/build.sh" ]; then
+        if [ -f ".asteroids_source" ]; then
+          # Nothing Phone (3a) / VoltageOS: the ROM builds this tree with plain
+          # make (gki_defconfig + two vendor fragments, LTO off), not Kleaf.
+          # Do the same so the Image matches the stock kernel.
+          set -euo pipefail
+          if [ "$PAGE_SIZE" != "4k" ]; then
+            echo "ERROR: the asteroids kernel is 4k-only." >&2
+            exit 1
+          fi
+          missing=()
+          for t in bc bison flex cpio pahole; do command -v "$t" >/dev/null || missing+=("$t"); done
+          [ -f /usr/include/openssl/ssl.h ] || missing+=(libssl-dev)
+          [ -f /usr/include/gelf.h ] || missing+=(libelf-dev)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            pkgs=()
+            for t in "${missing[@]}"; do [ "$t" = pahole ] && pkgs+=(dwarves) || pkgs+=("$t"); done
+            sudo apt-get update -qq && sudo apt-get install -y -qq "${pkgs[@]}"
+          fi
+
+          CLANG_VERSION="$(. common/build.config.constants && echo "$CLANG_VERSION")"
+          CLANG_BIN="$PWD/prebuilts/clang/host/linux-x86/clang-${CLANG_VERSION}/bin"
+          if [ ! -x "$CLANG_BIN/clang" ]; then
+            echo "ERROR: prebuilt clang-${CLANG_VERSION} not found; available:" >&2
+            ls prebuilts/clang/host/linux-x86 >&2 || true
+            exit 1
+          fi
+          export PATH="$CLANG_BIN:$PATH"
+          clang --version | head -1
+
+          OUT=/home/runner/out
+          MAKE=(make -C common O="$OUT" ARCH=arm64 LLVM=1 LLVM_IAS=1)
+          "${MAKE[@]}" gki_defconfig
+          (cd common && ARCH=arm64 scripts/kconfig/merge_config.sh -m -O "$OUT" "$OUT/.config" \
+            arch/arm64/configs/vendor/pineapple_perf.config \
+            arch/arm64/configs/vendor/asteroids_perf.config)
+          "${MAKE[@]}" olddefconfig
+          # Stock ships without LTO; keep it off so CFI matches the ROM's modules.
+          common/scripts/config --file "$OUT/.config" -d LTO_CLANG_THIN -d LTO_CLANG_FULL -e LTO_NONE
+          "${MAKE[@]}" olddefconfig
+          grep -E '^(# )?CONFIG_LTO_(NONE|CLANG_THIN|CLANG_FULL)[ =]|^CONFIG_LOCALVERSION=' "$OUT/.config"
+
+          STOCK_CFG="${{ github.workspace }}/config/stock_defconfig"
+          if [ -f "$STOCK_CFG" ]; then
+            echo "[*] Options that differ from the stock VoltageOS kernel config (informational):"
+            diff <(grep -E '^(CONFIG_|# CONFIG_)' "$STOCK_CFG" | sort) \
+                 <(grep -E '^(CONFIG_|# CONFIG_)' "$OUT/.config" | sort) | grep -E '^[<>]' | head -150 || true
+          fi
+
+          "${MAKE[@]}" -j"$(nproc)" Image
+          mkdir -p "$OUT/dist"
+          cp "$OUT/arch/arm64/boot/Image" "$OUT/dist/Image"
+          strings "$OUT/dist/Image" | grep -m1 '^Linux version' || true
+        elif [ -f "build/build.sh" ]; then
           if [ "$PAGE_SIZE" != "4k" ]; then
             echo "ERROR: page_size=${PAGE_SIZE} is only supported by the Kleaf (Bazel) build; this tree uses build/build.sh." >&2
             exit 1

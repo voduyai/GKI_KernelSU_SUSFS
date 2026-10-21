@@ -583,7 +583,8 @@ jobs:
       env:
         SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
         KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
-        KBUILD_BUILD_USER: ${{ (inputs.version == 'android15-6.6' || inputs.version == 'android16-6.12') && 'kleaf' || 'build-user' }}
+        # asteroids: the VoltageOS kernel reports build-user@build-host on 6.6 too.
+        KBUILD_BUILD_USER: ${{ (inputs.version == 'android16-6.12' || (inputs.version == 'android15-6.6' && inputs.os_patch_level != 'lts')) && 'kleaf' || 'build-user' }}
         KBUILD_BUILD_HOST: build-host
       uses: ./.github/actions/build-kernel
       with:

@@ -205,6 +205,32 @@ runs:
     #   run: |
     #     python "${{ github.workspace }}/.github/actions/download-kernel/fast_parallel_download.py"
 
+    # asteroids branch: Nothing Phone (3a) on VoltageOS ships a ROM-built
+    # 6.6.144-android15-8-4k-g580b8ea6c4fb kernel. Its source is PixelOS's
+    # sm7635 tree at that exact commit (ACK android15-6.6-lts + Qualcomm/WALT
+    # changes), so swap common/ to it. build/kernel and the prebuilt clang
+    # still come from the ACK android15-6.6-lts manifest synced above.
+    - name: Use Nothing Phone (3a) kernel source (asteroids)
+      if: inputs.version == 'android15-6.6' && inputs.os_patch_level == 'lts'
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        REPO="https://github.com/pixelos-asteroids/android_kernel_nothing_sm7635.git"
+        SHA="580b8ea6c4fbcd96425476f5f63c17cac6b824e4"
+        for attempt in 1 2 3 4 5; do
+          git fetch --depth=1 --no-tags "$REPO" "$SHA" && break
+          [ "$attempt" = 5 ] && { echo "Could not fetch $SHA from $REPO" >&2; exit 1; }
+          echo "fetch failed (attempt ${attempt}/5), retrying in $((attempt * 15))s..."
+          sleep $((attempt * 15))
+        done
+        git checkout -f --detach FETCH_HEAD
+        git clean -fdxq
+        [ "$(git rev-parse HEAD)" = "$SHA" ] || { echo "HEAD is not $SHA" >&2; exit 1; }
+        grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile
+        touch "${{ github.workspace }}/kernel/.asteroids_source"
+        echo "[!] common/ is now the asteroids kernel @ $SHA"
+
     - name: Capture Kernel Common Commit Metadata
       shell: bash
       working-directory: ${{ github.workspace }}/kernel
