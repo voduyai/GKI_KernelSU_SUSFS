@@ -366,9 +366,10 @@ jobs:
             # the linker can resolve security_context_to_sid_with_policy etc.
             if grep -q "^static int security_context_to_sid_with_policy" "$f"; then
               echo "[*] Stripping static from $f helpers (Next 6.6)"
-              sed -i 's/^static int security_context_to_sid_with_policy/int security_context_to_sid_with_policy/g' "$f"
-              sed -i 's/^static int security_sid_to_context_with_policy/int security_sid_to_context_with_policy/g' "$f"
-              sed -i 's/^static void security_compute_av_user_with_policy/void security_compute_av_user_with_policy/g' "$f"
+              # Newer Next defines them as "static <type> __nocfi <name>(" while
+              # the forward decls have no __nocfi; strip static from both forms
+              # or clang rejects "static declaration follows non-static".
+              sed -E -i 's/^static (int|void)( __nocfi)? (security_(context_to_sid|sid_to_context|compute_av_user)_with_policy)\b/\1\2 \3/' "$f"
               # also forward decls (same prefix, same sed covers them)
               echo "[+] Stripped static from $f"
             fi
