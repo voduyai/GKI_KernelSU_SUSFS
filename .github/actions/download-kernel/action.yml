@@ -228,7 +228,8 @@ runs:
         git clean -fdxq
         [ "$(git rev-parse HEAD)" = "$SHA" ] || { echo "HEAD is not $SHA" >&2; exit 1; }
         grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile
-        touch "${{ github.workspace }}/kernel/.asteroids_source"
+        # Marker for later steps; holds the source SHA for the version string.
+        echo "$SHA" > "${{ github.workspace }}/kernel/.asteroids_source"
         echo "[!] common/ is now the asteroids kernel @ $SHA"
 
     - name: Capture Kernel Common Commit Metadata

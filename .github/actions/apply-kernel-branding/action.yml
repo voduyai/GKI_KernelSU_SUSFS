@@ -54,6 +54,17 @@ runs:
             tail -n 1 scripts/setlocalversion
             exit 0
           fi
+          # asteroids: steps later in the build commit on top of the source, so
+          # the "-g<sha>" suffix would no longer match the stock kernel. Pin it
+          # to the source commit (6.6.144-android15-8-4k-g580b8ea6c4fb).
+          if [ -s ../.asteroids_source ]; then
+            SHORT="$(cut -c1-12 ../.asteroids_source)"
+            sed -i '$ s/\${scm_version}/-g'"$SHORT"'/' scripts/setlocalversion
+            grep -q -- "-g$SHORT\"\$" scripts/setlocalversion || { echo "Could not pin scm version in setlocalversion" >&2; tail -n 1 scripts/setlocalversion >&2; exit 1; }
+            echo "brand_name is stock, pinning asteroids scm version to -g$SHORT"
+            tail -n 1 scripts/setlocalversion
+            exit 0
+          fi
           echo "brand_name is empty, keeping stock kernel version string"
           exit 0
         fi
