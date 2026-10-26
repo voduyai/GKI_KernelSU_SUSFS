@@ -114,6 +114,19 @@ runs:
     #       python3 "${{ github.workspace }}/.github/scripts/susfs_fake_612.py" fs/proc/task_mmu.c revert
     #     fi
 
+    # Unlike the reverts above this one is live: susfs-patches only adds the
+    # blk.h context line when the kernel lacks it (and leaves a marker), and
+    # the header does not exist on those trees, so it must come back out.
+    - name: Revert blk.h context Fake Patch
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        if [ -f .susfs_fake_blk_h ]; then
+          echo "Reverting namespace.c blk.h context Fake Patch"
+          sed -i '/^#include <trace\/hooks\/blk.h>$/d' fs/namespace.c
+          rm -f .susfs_fake_blk_h
+        fi
+
     - name: Apply show_pad Fix
       shell: bash
       if: true

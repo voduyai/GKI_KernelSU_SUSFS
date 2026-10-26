@@ -190,9 +190,15 @@ jobs:
             OS_PATCH_LEVEL_YM="$OS_PATCH_LEVEL_INPUT"
           fi
           FIXED_BUILD_DATE="${OS_PATCH_LEVEL_YM}-05 04:20:00 UTC"
+          KBUILD_TS_FMT='+%a %b %d %H:%M:%S UTC %Y'
+          # muyu stock (tag android14-6.1-2025-06_r15): "Wed Dec  3 02:05:30 UTC 2025"
+          if [ "${{ inputs.version }}" = "android14-6.1" ] && [ "$OS_PATCH_LEVEL_INPUT" = "2025-06" ]; then
+            FIXED_BUILD_DATE="2025-12-03 02:05:30 UTC"
+            KBUILD_TS_FMT='+%a %b %e %H:%M:%S UTC %Y'
+          fi
           SOURCE_DATE_EPOCH=$(date -u -d "$FIXED_BUILD_DATE" +%s)
           echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> $GITHUB_ENV
-          KBUILD_TS=$(date -u -d @${SOURCE_DATE_EPOCH} '+%a %b %d %H:%M:%S UTC %Y')
+          KBUILD_TS=$(date -u -d @${SOURCE_DATE_EPOCH} "$KBUILD_TS_FMT")
           echo "KBUILD_BUILD_TIMESTAMP=${KBUILD_TS}" >> $GITHUB_ENV
           # Keep git metadata aligned with the same fixed timestamp.
           GIT_DATE=$(date -u -d @${SOURCE_DATE_EPOCH} '+%Y-%m-%dT%H:%M:%SZ')
@@ -296,9 +302,19 @@ jobs:
           # SUSFS stays API-matched to the always-latest KernelSU-Next tree. All
           # other roots (kernelsu, bakasu, finasu, sukisu-ultra) use the pinned
           # verified SUSFS commit.
-          if [ "${{ inputs.root_flavor }}" = "next" ]; then
+          if [ "${{ contains(inputs.feature_set, 'SUSFS') || inputs.feature_set == 'All' }}" != "true" ]; then
+            # SUSFS is off: don't depend on gitlab.com being reachable.
+            SUSFS_COMMIT=""
+            echo "SUSFS disabled, skipping SUSFS commit resolution"
+          elif [ "${{ inputs.root_flavor }}" = "next" ]; then
             BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
-            SUSFS_COMMIT="$(git ls-remote https://gitlab.com/simonpunk/susfs4ksu.git "refs/heads/${BRANCH}" | cut -f1)"
+            SUSFS_COMMIT=""
+            for attempt in 1 2 3 4 5; do
+              SUSFS_COMMIT="$(git ls-remote https://gitlab.com/simonpunk/susfs4ksu.git "refs/heads/${BRANCH}" | cut -f1)" && [ -n "$SUSFS_COMMIT" ] && break
+              echo "gitlab ls-remote failed (attempt ${attempt}/5), retrying in $((attempt * 15))s..."
+              sleep $((attempt * 15))
+            done
+            [ -n "$SUSFS_COMMIT" ] || { echo "Could not resolve SUSFS commit from gitlab" >&2; exit 1; }
             echo "KernelSU-Next: resolving SUSFS at latest on ${BRANCH} -> ${SUSFS_COMMIT}"
           else
             SUSFS_COMMIT="${{ inputs.susfs_commit }}"
@@ -372,9 +388,10 @@ jobs:
               # the linker can resolve security_context_to_sid_with_policy etc.
               if grep -q "^static int security_context_to_sid_with_policy" "$f"; then
                 echo "[*] Stripping static from $f helpers (Next 6.6)"
-                sed -i 's/^static int security_context_to_sid_with_policy/int security_context_to_sid_with_policy/g' "$f"
-                sed -i 's/^static int security_sid_to_context_with_policy/int security_sid_to_context_with_policy/g' "$f"
-                sed -i 's/^static void security_compute_av_user_with_policy/void security_compute_av_user_with_policy/g' "$f"
+                # Newer Next defines them as "static <type> __nocfi <name>(" while
+                # the forward decls have no __nocfi; strip static from both forms
+                # or clang rejects "static declaration follows non-static".
+                sed -E -i 's/^static (int|void)( __nocfi)? (security_(context_to_sid|sid_to_context|compute_av_user)_with_policy)\b/\1\2 \3/' "$f"
                 # also forward decls (same prefix, same sed covers them)
                 echo "[+] Stripped static from $f"
               fi
@@ -544,7 +561,9 @@ jobs:
         run: touch "${{ github.workspace }}/wild_gki.fragment"
 
       - name: Apply Kernel Bypass Hack
-        if: ${{ inputs.allow_version_mismatch == 'true' }}
+        # allow_version_mismatch is a boolean input; comparing it to the string
+        # 'true' is always false in Actions expressions, so test it directly.
+        if: ${{ inputs.allow_version_mismatch }}
         uses: ./.github/actions/bypass-kernel
         with:
           version: ${{ inputs.version }}
@@ -852,7 +871,7 @@ jobs:
             .status == "Build-verified only" and
             (.root.manager | length > 0) and
             (.root.version | length > 0) and
-            (.susfs_revision | test("^[0-9a-f]{40}$")) and
+            (.susfs_revision == "N/A" or (.susfs_revision | test("^[0-9a-f]{40}$"))) and
             (.kernel_source_commit | test("^[0-9a-f]{40}$")) and
             (.artifact_url | startswith("https://")) and
             (.sha256 | test("^sha256:[0-9a-f]{64}$")) and

@@ -83,6 +83,16 @@ runs:
           sed -i '/^#include <linux\/cpufreq_times.h>$/a #include <linux/dma-buf.h>' fs/proc/base.c
         fi
         # -ge 157 blocks stay disabled (context removal breaks SUSFS patch context)
+        # susfs4ksu gki-android14-6.1 (2026-10 sync) uses <trace/hooks/blk.h>
+        # as namespace.c context, which older 6.1 trees (e.g. 138) lack. Add it
+        # only for the patch; susfs-revert-patches removes it again.
+        if [ "${{ inputs.sublevel }}" -lt "157" ] \
+            && grep -q '^ #include <trace/hooks/blk.h>$' 50_add_susfs_in_gki-${{ inputs.version }}.patch \
+            && ! grep -q '^#include <trace/hooks/blk.h>$' fs/namespace.c; then
+          echo "Applying namespace.c blk.h context Fake Patch"
+          sed -i '/^#include "internal.h"$/a #include <trace/hooks/blk.h>' fs/namespace.c
+          touch .susfs_fake_blk_h
+        fi
 
     - name: Apply Android 15 6.6 Fake Patches
       shell: bash
@@ -139,6 +149,16 @@ runs:
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         patch -p1 < 50_add_susfs_in_gki-${{ inputs.version }}.patch
+
+        # susfs4ksu (2026-10 sync) calls ksu_setup_preinit_file() and
+        # ksu_preinit_handle_post_execveat() from do_execveat_common() unless
+        # KSU_NO_PREINIT is defined. Root trees that don't provide those
+        # (e.g. pershoot KernelSU-Next dev-susfs) fail at link time, so opt out.
+        if grep -q 'KSU_NO_PREINIT' fs/exec.c \
+            && ! grep -rqs 'ksu_setup_preinit_file' ../KernelSU ../KernelSU-Next ../BakaSU ../SukiSU-Ultra ../KowSU ../FinaSU; then
+          sed -i '0,/^#ifndef KSU_NO_PREINIT$/s//#define KSU_NO_PREINIT\n#ifndef KSU_NO_PREINIT/' fs/exec.c
+          echo "Root tree has no ksu_setup_preinit_file(); defined KSU_NO_PREINIT in fs/exec.c"
+        fi
 
         # SUSFS's OPEN_REDIRECT code unconditionally calls VMA_PAD_START(), which
         # only exists on GKI branches that carry Google's page-size-migration

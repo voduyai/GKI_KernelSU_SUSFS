@@ -27,7 +27,12 @@ runs:
         kernel_version: ${{ inputs.kernel_version }}
         sublevel: ${{ inputs.sublevel }}
 
+    # muyu (android14-6.1) ships cifs_arc4.ko, cifs_md4.ko, cifs.ko and
+    # dns_resolver.ko in vendor_boot's first-stage modules.load. Building CIFS
+    # into the kernel makes those loads fail ("exports duplicate symbol") and
+    # first-stage init aborts the boot, so keep CIFS as the vendor's modules.
     - name: Setup CIFS Configs
+      if: inputs.version != 'android14-6.1'
       uses: ./.github/actions/cifs
       with:
         version: ${{ inputs.version }}
