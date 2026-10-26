@@ -1,0 +1,74 @@
+name: Build muyu (Xiaomi Pad 7 Pro)
+
+# One-click build for Xiaomi Pad 7 Pro (muyu), global HyperOS 3.0.304.0.
+# Stock kernel: 6.1.138-android14-11-g0c3d559bcd85-ab14529422
+# (= android14-6.1-2025-06_r15, pinned by the muyu branch).
+#
+# It does not build anything itself: it dispatches "Build Kernels" (main.yml)
+# on the muyu branch with the inputs below, so the upstream workflow files stay
+# untouched and upstream updates merge cleanly. Change a value here to change
+# what every muyu build uses.
+
+permissions:
+  actions: write
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_REF: muyu
+    steps:
+      - name: Start Build Kernels with the muyu settings
+        run: |
+          set -euo pipefail
+          before="$(gh run list --workflow main.yml --branch "$BUILD_REF" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+
+          gh workflow run main.yml --ref "$BUILD_REF" \
+            -f release_type=CI \
+            -f use_cache=true \
+            -f allow_version_mismatch=false \
+            -f kernel_build_version=6.1.x-android14 \
+            -f os_patch_level=2025-06 \
+            -f page_size=4k \
+            -f brand_name=stock \
+            -f keep_kmi=false \
+            -f commit_mode=verified \
+            -f root_flavor=KernelSU-Next \
+            -f use_susfs=true \
+            -f use_nomount=true \
+            -f use_bbg=true \
+            -f use_net=true \
+            -f use_ds=true \
+            -f use_ntsync=true \
+            -f use_ptrace=true \
+            -f use_unicode=true \
+            -f use_bpf=true \
+            -f use_perf=false \
+            -f test_release_notes=false
+
+          # Report the run that was just started (it can take a few seconds to show up).
+          for i in $(seq 1 12); do
+            sleep 5
+            run="$(gh run list --workflow main.yml --branch "$BUILD_REF" --event workflow_dispatch --limit 1 --json databaseId,url --jq '.[0]')"
+            id="$(jq -r '.databaseId // 0' <<< "$run")"
+            if [ "$id" != "0" ] && [ "$id" != "$before" ]; then
+              url="$(jq -r '.url' <<< "$run")"
+              echo "Started: $url"
+              {
+                echo "## muyu build started"
+                echo
+                echo "Run: $url"
+                echo
+                echo "6.1.x-android14 · 2025-06 (r15) · 4k · brand stock · KernelSU-Next"
+                echo "SUSFS, NoMount, BBG, Networking, DroidSpaces, NTSync, Ptrace, Unicode, BPF · bypass off"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
+          echo "Dispatched, but the new run did not show up yet; check the Build Kernels list."
